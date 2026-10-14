@@ -827,6 +827,43 @@ impl Presentation {
         *n = n.saturating_add(1);
         author_id(tag, *n)
     }
+    /// Gives every paragraph of every slide's text frames a stable id: one
+    /// that has none, or shares another's (a split or a paste copied it),
+    /// gets a fresh one from [`Presentation::alloc_id`]. A co-authored deck
+    /// names each paragraph by this id.
+    pub fn ensure_pids(&mut self) {
+        fn rec(shapes: &mut [Shape], used: &mut std::collections::HashSet<u64>, fresh: &mut dyn FnMut() -> u64) {
+            for s in shapes {
+                if let Some(t) = s.text.as_mut() {
+                    for p in &mut t.paragraphs {
+                        if p.pid == 0 || !used.insert(p.pid) {
+                            p.pid = fresh();
+                            used.insert(p.pid);
+                        }
+                    }
+                }
+                if let Some(children) = s.children_mut() {
+                    rec(children, used, fresh);
+                }
+            }
+        }
+        let mut slides = std::mem::take(&mut self.slides);
+        let mut used = std::collections::HashSet::new();
+        for slide in &mut slides {
+            // A slide whose ids are all set and new is left shared (undo
+            // snapshots share unchanged slides); only one that needs an id
+            // is copied.
+            let mut pids = vec![];
+            walk(&slide.shapes, &mut |s, _| pids.extend(s.text.iter().flat_map(|t| t.paragraphs.iter().map(|p| p.pid))));
+            let mut probe = used.clone();
+            if pids.iter().all(|&pid| pid != 0 && probe.insert(pid)) {
+                used = probe;
+                continue;
+            }
+            rec(&mut Arc::make_mut(slide).shapes, &mut used, &mut || self.alloc_id());
+        }
+        self.slides = slides;
+    }
     /// Set the author tag new ids carry (masked to [`AUTHOR_TAG_BITS`]).
     pub fn set_author_tag(&mut self, tag: u32) {
         self.author_tag = tag & AUTHOR_TAG_MASK;

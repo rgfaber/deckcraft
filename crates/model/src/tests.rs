@@ -222,3 +222,64 @@ fn four_by_three_master_scales() {
     let x = title.xfrm.unwrap();
     assert!(x.x + x.w <= 720.0 + 1e-6);
 }
+
+fn pids(p: &Presentation) -> Vec<u64> {
+    let mut out = vec![];
+    for s in &p.slides {
+        walk(&s.shapes, &mut |sh, _| out.extend(sh.text.iter().flat_map(|t| t.paragraphs.iter().map(|q| q.pid))));
+    }
+    out
+}
+
+#[test]
+fn ensure_pids_gives_every_paragraph_its_own_id() {
+    let mut p = Presentation::default();
+    p.set_author_tag(4);
+    let body = TextBody { paragraphs: vec![text::Paragraph::new("one"), text::Paragraph::new("two")], ..Default::default() };
+    let group = Shape {
+        kind: ShapeKind::Group { children: vec![Shape { text: Some(body.clone()), ..Default::default() }], child: Xfrm::new(0.0, 0.0, 1.0, 1.0) },
+        ..Default::default()
+    };
+    Arc::make_mut(&mut p.slides[0]).shapes.extend([Shape { text: Some(body), ..Default::default() }, group]);
+    p.ensure_pids();
+    let ids = pids(&p);
+    assert!(ids.len() >= 4 && ids.iter().all(|&i| i != 0));
+    let mut unique = ids.clone();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(unique.len(), ids.len());
+    assert!(ids.iter().all(|&i| split_id(i).0 == 4), "paragraph ids are author-scoped");
+    let before = ids.clone();
+    p.ensure_pids();
+    assert_eq!(pids(&p), before, "ids that are set stay");
+}
+
+#[test]
+fn ensure_pids_renumbers_a_copied_paragraph_and_keeps_the_first() {
+    let mut p = Presentation::default();
+    Arc::make_mut(&mut p.slides[0]).shapes[0].text = Some(TextBody::from_text("title"));
+    p.ensure_pids();
+    let slide = Arc::make_mut(&mut p.slides[0]);
+    let t = slide.shapes[0].text.as_mut().unwrap();
+    t.paragraphs.push(t.paragraphs[0].clone());
+    let first = t.paragraphs[0].pid;
+    p.ensure_pids();
+    let t = p.slides[0].shapes[0].text.as_ref().unwrap();
+    assert_eq!(t.paragraphs[0].pid, first);
+    assert_ne!(t.paragraphs[1].pid, first);
+}
+
+#[test]
+fn ensure_pids_leaves_a_finished_slide_shared() {
+    let mut p = Presentation::default();
+    let layout = p.masters[0].layouts[1].id;
+    let mut s = defaults::new_slide(&mut p, layout);
+    s.shapes[0].text = Some(TextBody::from_text("second"));
+    p.slides.push(Arc::new(s));
+    p.ensure_pids();
+    let snapshot = p.slides.clone();
+    Arc::make_mut(&mut p.slides[1]).shapes[0].text.as_mut().unwrap().paragraphs[0].pid = 0;
+    p.ensure_pids();
+    assert!(Arc::ptr_eq(&p.slides[0], &snapshot[0]), "an untouched slide is not copied");
+    assert!(!Arc::ptr_eq(&p.slides[1], &snapshot[1]));
+}

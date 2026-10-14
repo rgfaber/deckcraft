@@ -424,6 +424,12 @@ impl Run {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Paragraph {
+    /// Stable id while a deck is co-authored, author-scoped like every other
+    /// id ([`crate::author_id`]); 0 until [`crate::Presentation::ensure_pids`]
+    /// gives it one. A copy of a paragraph must not keep it: ensure_pids
+    /// renumbers a duplicate.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub pid: u64,
     /// Outline level 0–8.
     pub level: u8,
     #[serde(skip_serializing_if = "is_default_para")]
@@ -432,6 +438,10 @@ pub struct Paragraph {
     /// Properties of the paragraph end mark (used for an empty paragraph's caret).
     #[serde(skip_serializing_if = "is_default_props")]
     pub end_props: RunProps,
+}
+
+fn is_zero(v: &u64) -> bool {
+    *v == 0
 }
 
 fn is_default_para(p: &ParaProps) -> bool {
