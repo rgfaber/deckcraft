@@ -112,6 +112,10 @@ pub fn handle(app: &mut SlideApp, ctx: &egui::Context, req: &ControlRequest) -> 
         "engine.commands" => ok(all_commands(app)),
         "document.inspect" => wrap(app.run("document.inspect", json!({}))),
         "ui.inspect" => ok(inspect(app, ctx)),
+        "ui.share" => {
+            app.share.open = p.get("value").and_then(Value::as_bool).unwrap_or(!app.share.open);
+            ok(json!({"share": app.share.open, "active": app.session.collab_active()}))
+        }
         "ui.pointer" => {
             let Some(events) = p.get("events").and_then(Value::as_array) else { return err("missing `events`") };
             let base = p.get("mods").map(mods_from).unwrap_or_default();

@@ -325,6 +325,21 @@ fn overlays(app: &mut SlideApp, ui: &Ui, painter: &egui::Painter, xf: Xf, t: &To
     let Some(st) = app.session.active() else { return };
     let sel_stroke = Stroke::new(1.0, t.selection);
     let editing = st.selection.text.clone();
+    // Co-authors' selections on this slide, in their colours, when this deck is shared.
+    if app.session.collab_doc() == Some(st.uid) {
+        for (name, [r, g, b], at) in app.session.collab_peers() {
+            let Some((_, shapes)) = at.filter(|(slide, _)| *slide == st.selection.slide) else { continue };
+            let color = Color32::from_rgb(r, g, b);
+            for id in shapes {
+                let Some(sh) = st.shape(id) else { continue };
+                let x = deckcraft_engine::cmd::xfrm_of(&st.doc, &st.selection, sh);
+                let a = x.affine();
+                let corners = [Point::new(0.0, 0.0), Point::new(x.w, 0.0), Point::new(x.w, x.h), Point::new(0.0, x.h)].map(|q| xf.to_screen(a * q));
+                poly(painter, corners, Stroke::new(2.0, color));
+                painter.text(corners[0] + vec2(0.0, -2.0), Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(11.0), color);
+            }
+        }
+    }
     for id in &st.selection.shapes {
         let Some(sh) = st.shape(*id) else { continue };
         let x = deckcraft_engine::cmd::xfrm_of(&st.doc, &st.selection, sh);

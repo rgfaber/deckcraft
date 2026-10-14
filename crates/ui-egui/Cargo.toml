@@ -17,6 +17,8 @@ deckcraft-text = { workspace = true }
 deckcraft-render = { workspace = true }
 deckcraft-anim = { workspace = true }
 deckcraft-engine = { workspace = true }
+craft-collab = { workspace = true }
+craft-share = { workspace = true }
 deckcraft-media = { workspace = true }
 egui = { workspace = true }
 serde = { workspace = true }

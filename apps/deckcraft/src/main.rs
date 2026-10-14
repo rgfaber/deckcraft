@@ -1,6 +1,6 @@
 //! DeckCraft desktop app.
 //!
-//! Usage: `deckcraft [--control <port>] [--sample] [--show] [files…]`
+//! Usage: `deckcraft [--control <port>] [--sample] [--show] [--collab <config.json>] [files…]`
 //!
 //! `--control <port>` (or `DECKCRAFT_CONTROL_PORT`) starts a localhost JSON-lines control server:
 //! `{"id":1,"method":"ui.inspect","params":{}}` → `{"id":1,"ok":true,"result":…}`.
@@ -13,6 +13,7 @@
 #![forbid(unsafe_code)]
 
 mod audio;
+mod collab_setup;
 mod control_server;
 #[cfg(any(target_os = "windows", test))]
 mod graphics;
@@ -123,11 +124,26 @@ fn services() -> Services {
         audio_out: std::env::var_os("DECKCRAFT_NO_AUDIO")
             .is_none()
             .then(|| Box::new(audio::CpalOut::default()) as Box<dyn deckcraft_media::AudioOut>),
+        join_invite: Some(Box::new(collab_setup::join_from_invite)),
+        realm_refresh: Some(Box::new(collab_setup::realm_refresh)),
+        sign_in: Some(Box::new(collab_setup::sign_in)),
+        sign_in_check: Some(Box::new(collab_setup::sign_in_check)),
+        identity_name: Some(Box::new(collab_setup::identity_name)),
+        set_identity_name: Some(Box::new(collab_setup::set_identity_name)),
         ..Default::default()
     }
 }
 
-const APP_ID: &str = "ai.storyteller.deckcraft";
+/// The build's identity: upstream's unless a fork's build sets its own at compile time (the mesh
+/// preview), so the window matches its desktop entry.
+const APP_ID: &str = match option_env!("DECKCRAFT_APP_ID") {
+    Some(id) => id,
+    None => "ai.storyteller.deckcraft",
+};
+const APP_NAME: &str = match option_env!("DECKCRAFT_APP_NAME") {
+    Some(name) => name,
+    None => "DeckCraft",
+};
 
 fn app_icon() -> Option<egui::IconData> {
     let png: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.deckcraft.png");
@@ -142,12 +158,14 @@ fn main() -> eframe::Result {
     let mut files = Vec::new();
     let mut sample = false;
     let mut show = false;
+    let mut collab: Option<String> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--control" => control_port = args.next().and_then(|p| p.parse().ok()),
             "--sample" => sample = true,
             "--show" => show = true,
+            "--collab" => collab = args.next(),
             "--version" => {
                 println!("deckcraft {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
@@ -170,7 +188,7 @@ fn main() -> eframe::Result {
     }
     let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("DeckCraft")
+            .with_title(APP_NAME)
             .with_inner_size([1440.0, 900.0])
             .with_min_inner_size([900.0, 560.0])
             .with_drag_and_drop(true)
@@ -194,7 +212,7 @@ fn main() -> eframe::Result {
     #[cfg(target_os = "windows")]
     graphics::configure(&mut options, eframe::wgpu::Backends::from_env());
     eframe::run_native(
-        "DeckCraft",
+        APP_NAME,
         options,
         Box::new(move |cc| {
             let mut app = SlideApp::new(Session::new(), services());
@@ -219,6 +237,19 @@ fn main() -> eframe::Result {
             for f in files {
                 if let Err(e) = app.open_path(&f) {
                     log::error!("{f}: {e}");
+                }
+            }
+            // The person's mesh identity, so the Share window's realm row works from a plain run; a
+            // `--collab` config then shares or joins a presentation with its own identity.
+            if let Err(e) = collab_setup::ensure_default_identity(&mut app.session) {
+                log::warn!("collab: {e}");
+            }
+            if let Some(path) = collab.as_deref() {
+                if app.session.active().is_none() {
+                    let _ = app.session.execute("file.new", &serde_json::Value::Null);
+                }
+                if let Err(e) = collab_setup::attach(&mut app.session, path) {
+                    log::warn!("collab: {e}");
                 }
             }
             if show {

@@ -13,6 +13,10 @@ repository = "https://github.com/storytold/deckcraft"
 [workspace.dependencies]
 # the shared Craft collaboration seam (crates.io)
 craft-collab = { package = "macula-craft-seam", version = "0.5" }
+# its Macula mesh adapter (crates.io)
+macula-craft-collab = "0.5"
+# its Share and Sign in windows (crates.io)
+craft-share = { package = "macula-craft-share", version = "0.5" }
 # internal
 deckcraft-geom = { path = "crates/geom" }
 deckcraft-color = { path = "crates/color" }

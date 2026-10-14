@@ -20,6 +20,7 @@ author's new ids carry that author's tag in the bits above 32 and never collide.
 | `engine.commands` | — | Every command: id, label, menu path, shortcut, params doc, enabled / disabled reason |
 | `document.inspect` | — | Slides, sections, layouts, shapes, selection |
 | `ui.inspect` | — | UI state, active tool, window/canvas/slide rects, dialog, slide show state, documents, perf (fps, render ms) |
+| `ui.share` | `{value?: bool}` | Open or close the Share window (toggles without `value`); answers whether it is open and whether a presentation is shared |
 | `ui.tool.select` | `{tool, preset?}` | `select`, `text`, `shape` + preset, any preset name, `curve`, `freeform`, `scribble`, `pen`, `highlighter`, `eraser` |
 | `ui.pointer` | `{events: [{kind: down\|drag\|up\|move\|doubleclick\|tripleclick, x, y, mods?}], mods?}` | Drive the active tool in slide points through the same code path as the mouse |
 | `ui.key` / `ui.text` | `{key, shift?, alt?, cmd?}` / `{text}` | Keyboard input (also drives a running slide show) |

@@ -16,6 +16,7 @@ pub mod media;
 pub mod menus;
 pub mod panes;
 pub mod ribbon;
+mod share_host;
 pub mod show;
 pub mod sorter;
 pub mod status;
@@ -58,6 +59,19 @@ pub struct Services {
     pub clipboard_image: Option<Box<dyn FnMut() -> Option<Vec<u8>>>>,
     /// Audio output for media playback (cpal on desktop); without one media plays silently.
     pub audio_out: Option<Box<dyn deckcraft_media::AudioOut>>,
+    /// Join a shared presentation through an invite line (the app owns the mesh): `(session,
+    /// invite line, display name)`.
+    pub join_invite: Option<Box<dyn Fn(&mut Session, &str, &str) -> Result<(), String>>>,
+    /// The realm membership, read fresh.
+    pub realm_refresh: Option<Box<dyn Fn(&mut Session) -> Result<serde_json::Value, String>>>,
+    /// Start the realm sign-in; the answer carries the link.
+    pub sign_in: Option<Box<dyn Fn(&mut Session) -> Result<serde_json::Value, String>>>,
+    /// Poll the waiting sign-in.
+    pub sign_in_check: Option<Box<dyn Fn(&mut Session) -> Result<serde_json::Value, String>>>,
+    /// The identity's display name.
+    pub identity_name: Option<Box<dyn Fn(&mut Session) -> Result<serde_json::Value, String>>>,
+    /// Save the identity's display name.
+    pub set_identity_name: Option<Box<dyn Fn(&mut Session, &str) -> Result<serde_json::Value, String>>>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -205,6 +219,9 @@ pub struct SlideApp {
     pub(crate) notes_buf: (u64, usize, String),
     /// Thumbnail pane drag (slide index, current drop index).
     pub(crate) thumb_drag: Option<(usize, usize)>,
+    /// The Share and Sign in windows (macula-craft-share).
+    pub share: craft_share::ShareState,
+    pub login: craft_share::LoginState,
 }
 
 impl SlideApp {
@@ -239,6 +256,8 @@ impl SlideApp {
             quit_confirmed: false,
             notes_buf: (0, usize::MAX, String::new()),
             thumb_drag: None,
+            share: craft_share::ShareState::default(),
+            login: craft_share::LoginState::default(),
         }
     }
 
@@ -694,6 +713,12 @@ impl SlideApp {
             }
         });
         dialogs::show(self, &ctx);
+        // A shared presentation: peers' edits land, and the frame clock keeps running while shared.
+        if self.session.collab_active() {
+            self.session.collab_tick();
+            ctx.request_repaint_after(std::time::Duration::from_millis(50));
+        }
+        share_host::show(self, &ctx);
         menus::palette(self, &ctx);
         for url in std::mem::take(&mut self.pending_urls) {
             ctx.open_url(egui::OpenUrl::new_tab(url));

@@ -85,6 +85,15 @@ pub fn title_bar(app: &mut SlideApp, ui: &mut Ui) {
             let from = app.session.active().map(|d| d.selection.slide).unwrap_or(0);
             app.start_show(from, false);
         }
+        let live = icon_toggle(&mut right, Icon::Share, "Share live with people", has_doc, app.session.collab_active());
+        egui::Popup::menu(&live).show(|ui| {
+            if ui.button("Share Live (Invite People)…").clicked() {
+                app.share.open = true;
+            }
+            if ui.button("Sign In…").clicked() {
+                app.login.open = true;
+            }
+        });
         if icon_toggle(&mut right, Icon::CommentsBubble, "Comments", has_doc, app.ui.pane.as_deref() == Some("comments")).clicked() {
             let _ = app.run("view.pane", json!({"pane": "comments", "toggle": true}));
         }
