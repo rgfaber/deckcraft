@@ -11,6 +11,8 @@ rust-version = "1.90"
 repository = "https://github.com/storytold/deckcraft"
 
 [workspace.dependencies]
+# the shared Craft collaboration seam (crates.io)
+craft-collab = { package = "macula-craft-seam", version = "0.5" }
 # internal
 deckcraft-geom = { path = "crates/geom" }
 deckcraft-color = { path = "crates/color" }

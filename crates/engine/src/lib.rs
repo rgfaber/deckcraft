@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 pub mod cmd;
+pub mod collab;
 pub mod connect;
 pub mod guard;
 pub mod keys;
@@ -309,6 +310,10 @@ pub struct Session {
     pub recovery_dir: Option<std::path::PathBuf>,
     /// Media playback state, written by the UI host every frame (empty without a host).
     pub media_status: std::collections::HashMap<ShapeId, MediaStatus>,
+    /// The presentation shared over the mesh, when one is ([`collab`]).
+    collab: Option<collab::CollabRuntime>,
+    /// The realm membership status the app read for this person (the Share window shows it).
+    realm: Option<Value>,
 }
 
 impl Default for Session {
@@ -334,6 +339,8 @@ impl Session {
             depth: 0,
             recovery_dir: None,
             media_status: Default::default(),
+            collab: None,
+            realm: None,
         }
     }
     /// A session with one new presentation open.
@@ -398,8 +405,12 @@ impl Session {
                 return Err(EngineError::Disabled(id.into(), e));
             }
         }
-        let before = self.active().map(|d| (d.uid, d.doc.clone(), d.selection.clone()));
         let outer = self.depth == 0;
+        // A shared presentation undoes this author's own edits only, and shares no redo.
+        if outer && let Some(r) = self.collab_intercept(id) {
+            return r;
+        }
+        let before = self.active().map(|d| (d.uid, d.doc.clone(), d.selection.clone()));
         self.depth += 1;
         let r = (spec.run)(self, params);
         self.depth -= 1;
@@ -415,6 +426,10 @@ impl Session {
             && outer
         {
             push_undo(st, HistoryEntry { label: spec.label.to_string(), doc: old, selection: sel });
+        }
+        // A shared presentation shares the edit, or refuses it and stays as it was last shared.
+        if outer {
+            self.collab_after(id)?;
         }
         if spec.journal && outer {
             self.journal.push((id.to_string(), params.clone()));

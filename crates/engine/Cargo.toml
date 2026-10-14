@@ -17,6 +17,7 @@ deckcraft-text = { workspace = true }
 deckcraft-render = { workspace = true }
 deckcraft-pdf = { workspace = true }
 deckcraft-format = { workspace = true }
+craft-collab = { workspace = true }
 deckcraft-pptx = { workspace = true }
 deckcraft-media = { workspace = true }
 serde = { workspace = true }
