@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata for the mesh preview build of the rgfaber/deckcraft fork. package.sh
+     substitutes @VERSION@ and @DATE@. -->
+<component type="desktop-application">
+  <id>io.macula.deckcraft-mesh</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <name>DeckCraft (mesh preview)</name>
+  <summary>Work on slide decks together over the Macula mesh</summary>
+  <developer id="io.macula">
+    <name>Macula</name>
+  </developer>
+  <description>
+    <p>
+      A preview build of DeckCraft, the open-source presentation app, with co-editing over the Macula mesh: people on different machines edit one deck, with no server holding it. A host shares a deck by invite, or with the members of a realm, including a realm other than its own. While a deck is shared, slides, their order, shapes, their stacking and the text in them travel; changes to masters, layouts, the theme, sections and new pictures or media wait for a later preview.
+    </p>
+    <p>
+      This is a fork's build, not an upstream DeckCraft release.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.macula.deckcraft-mesh.desktop</launchable>
+  <icon type="stock">io.macula.deckcraft-mesh</icon>
+  <url type="homepage">https://github.com/rgfaber/deckcraft</url>
+  <url type="bugtracker">https://github.com/macula-io/macula-craft-collab/issues</url>
+  <categories>
+    <category>Office</category>
+    <category>Presentation</category>
+  </categories>
+  <keywords>
+    <keyword>presentation</keyword>
+    <keyword>collaboration</keyword>
+    <keyword>mesh</keyword>
+  </keywords>
+  <requires>
+    <display_length compare="ge">760</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <provides>
+    <binary>deckcraft-mesh</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

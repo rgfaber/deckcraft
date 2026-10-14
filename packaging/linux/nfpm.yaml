@@ -3,7 +3,7 @@
 # exports VERSION and NFPM_ARCH.
 #
 #   nfpm package -f packaging/linux/nfpm.yaml -p deb -t dist/release/
-name: deckcraft
+name: ${PKG}
 arch: ${NFPM_ARCH}
 platform: linux
 version: ${VERSION}
@@ -13,8 +13,8 @@ release: 1
 section: editors
 priority: optional
 maintainer: ${DECKCRAFT_MAINTAINER}
-vendor: Learning Machines LLC
-homepage: https://getartcraft.com/apps/deckcraft
+vendor: ${DECKCRAFT_VENDOR}
+homepage: ${DECKCRAFT_HOMEPAGE}
 license: MIT OR Apache-2.0
 description: |-
   Open-source, native presentation app that works the way PowerPoint users
@@ -58,11 +58,11 @@ overrides:
       - xdg-desktop-portal
 
 contents:
-  - src: ${STAGE}/usr/bin/deckcraft
-    dst: /usr/bin/deckcraft
+  - src: ${STAGE}/usr/bin/${PKG}
+    dst: /usr/bin/${PKG}
     file_info: { mode: 0755 }
-  - src: ${STAGE}/usr/bin/deckcraft-cli
-    dst: /usr/bin/deckcraft-cli
+  - src: ${STAGE}/usr/bin/${PKG}-cli
+    dst: /usr/bin/${PKG}-cli
     file_info: { mode: 0755 }
   - src: ${STAGE}/usr/share/
     dst: /usr/share/

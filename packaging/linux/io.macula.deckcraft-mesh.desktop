@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=DeckCraft (mesh preview)
+GenericName=Presentation
+Comment=Work on slide decks together over the Macula mesh, with no server in between
+Exec=deckcraft-mesh %F
+TryExec=deckcraft-mesh
+Icon=io.macula.deckcraft-mesh
+Terminal=false
+StartupNotify=true
+StartupWMClass=io.macula.deckcraft-mesh
+Categories=Office;Presentation;
+Keywords=presentation;slides;slide show;deck;pptx;collaboration;mesh;co-edit;
+MimeType=application/vnd.openxmlformats-officedocument.presentationml.presentation;application/vnd.openxmlformats-officedocument.presentationml.template;application/vnd.openxmlformats-officedocument.presentationml.slideshow;
