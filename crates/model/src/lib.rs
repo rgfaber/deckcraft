@@ -478,6 +478,9 @@ pub enum Background {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Comment {
+    /// Stable id from [`Presentation::alloc_id`] (0: not yet given one). A co-authored deck
+    /// names each comment and reply by it, so two authors' comments never collide.
+    pub id: u64,
     pub author: String,
     pub initials: String,
     pub text: String,
@@ -864,6 +867,35 @@ impl Presentation {
         }
         self.slides = slides;
     }
+    /// Gives every comment and reply that has no id, or shares another's, a fresh one from
+    /// [`Presentation::alloc_id`]. Slides whose comments are all named are left shared.
+    pub fn ensure_comment_ids(&mut self) {
+        fn named(c: &Comment, used: &mut std::collections::HashSet<u64>) -> bool {
+            c.id != 0 && used.insert(c.id) && c.replies.iter().all(|r| named(r, used))
+        }
+        fn name(c: &mut Comment, used: &mut std::collections::HashSet<u64>, fresh: &mut dyn FnMut() -> u64) {
+            if c.id == 0 || !used.insert(c.id) {
+                c.id = fresh();
+                used.insert(c.id);
+            }
+            for r in &mut c.replies {
+                name(r, used, fresh);
+            }
+        }
+        let mut slides = std::mem::take(&mut self.slides);
+        let mut used = std::collections::HashSet::new();
+        for slide in &mut slides {
+            let mut probe = used.clone();
+            if slide.comments.iter().all(|c| named(c, &mut probe)) {
+                used = probe;
+                continue;
+            }
+            for c in &mut Arc::make_mut(slide).comments {
+                name(c, &mut used, &mut || self.alloc_id());
+            }
+        }
+        self.slides = slides;
+    }
     /// Set the author tag new ids carry (masked to [`AUTHOR_TAG_BITS`]).
     pub fn set_author_tag(&mut self, tag: u32) {
         self.author_tag = tag & AUTHOR_TAG_MASK;
@@ -871,9 +903,18 @@ impl Presentation {
     /// Make sure every counter is above every id in use under its tag (after loading a file).
     pub fn fix_next_id(&mut self) {
         let mut ids = Vec::new();
+        fn comment_ids(c: &Comment, ids: &mut Vec<u64>) {
+            ids.push(c.id);
+            for r in &c.replies {
+                comment_ids(r, ids);
+            }
+        }
         for s in &self.slides {
             ids.push(s.id.0);
             walk(&s.shapes, &mut |sh, _| ids.push(sh.id.0));
+            for c in &s.comments {
+                comment_ids(c, &mut ids);
+            }
         }
         for ma in &self.masters {
             ids.push(ma.id.0);

@@ -10,13 +10,18 @@
 //! - a text frame's paragraphs are the named body `<shape id>`, one paragraph per body paragraph
 //!   under the paragraph's own id, so concurrent typing, Enter and Backspace merge;
 //! - a paragraph's runs and formatting are the register entry `p/<paragraph id>`, laid over the
-//!   merged text.
+//!   merged text;
+//! - a slide's comment threads, in order, are the list `c/<slide id>`, of comment ids, and a
+//!   thread's replies the list `r/<comment id>`;
+//! - a comment or reply is the register entry `m/<comment id>`: its slide and the comment without
+//!   its replies, so two authors commenting at once keep both, and a reply, a resolve and an edit
+//!   of one comment never overwrite another.
 //!
 //! A local edit is captured by comparing the deck with what was last shared, so every command
-//! that changes slides, shapes or text shares without a line of its own here. A peer's change
+//! that changes slides, shapes, text or comments shares without a line of its own here. A peer's change
 //! rebuilds the slides it touched from the shared document. Ids are author-scoped
-//! ([`deckcraft_model::author_id`]), so two authors adding a slide or a shape at once never
-//! collide.
+//! ([`deckcraft_model::author_id`]), so two authors adding a slide, a shape or a comment at once
+//! never collide. A comment made while shared carries this author's name on the shared deck.
 //!
 //! What cannot travel this way is refused while shared, and the deck is left as it was:
 //! changes outside the slides (masters, layouts, the theme, sections, the presentation's
@@ -28,7 +33,7 @@ use std::sync::Arc;
 
 use craft_collab::text::{BodyParagraph, TextMerge};
 use deckcraft_model::text::{Paragraph, Run, RunKind};
-use deckcraft_model::{Presentation, Shape, ShapeId, Slide, SlideId};
+use deckcraft_model::{Comment, Presentation, Shape, ShapeId, Slide, SlideId};
 use serde_json::{Value, json};
 
 use crate::{EngineError, Result, Session};
@@ -60,11 +65,41 @@ fn para_key(pid: u64) -> String {
     format!("p/{pid}")
 }
 
-/// A slide as its record carries it: everything but its shapes.
+fn comments_list(slide: u64) -> String {
+    format!("c/{slide}")
+}
+
+fn replies_list(comment: u64) -> String {
+    format!("r/{comment}")
+}
+
+fn comment_key(comment: u64) -> String {
+    format!("m/{comment}")
+}
+
+/// A slide as its record carries it: everything but its shapes and its comments.
 fn slide_record(s: &Slide) -> String {
     let mut s = s.clone();
     s.shapes.clear();
+    s.comments.clear();
     serde_json::to_string(&s).unwrap_or_default()
+}
+
+/// A comment as its record carries it: its slide, and the comment without its replies (they
+/// travel as their own records).
+fn comment_record(slide: SlideId, c: &Comment) -> String {
+    let mut c = c.clone();
+    c.replies.clear();
+    json!({"slide": slide.0, "comment": c}).to_string()
+}
+
+fn ids_of(comments: &[Comment]) -> Vec<String> {
+    comments.iter().map(|c| c.id.to_string()).collect()
+}
+
+/// Every comment and reply on a slide with its replies, threads first.
+fn all_comments(s: &Slide) -> Vec<&Comment> {
+    s.comments.iter().flat_map(|c| std::iter::once(c).chain(c.replies.iter())).collect()
 }
 
 /// A shape as its record carries it: its slide, and the shape without its paragraphs (they
@@ -170,13 +205,15 @@ fn body_of(sh: &Shape) -> Vec<BodyParagraph> {
     paragraphs_of(sh).iter().map(|p| BodyParagraph { para: p.pid.to_string(), text: plain(p), props: None }).collect()
 }
 
-/// Every record of a slide and its shapes: what a slide new to the shared document needs.
+/// Every record of a slide, its shapes and its comments: what a slide new to the shared document
+/// needs.
 fn slide_entries(s: &Slide) -> Vec<(String, String)> {
     let mut out = vec![(slide_key(s.id.0), slide_record(s))];
     for sh in &s.shapes {
         out.push((shape_key(sh.id.0), shape_record(s.id, sh)));
         out.extend(paragraphs_of(sh).iter().map(|p| (para_key(p.pid), para_record(sh.id, p))));
     }
+    out.extend(all_comments(s).into_iter().map(|c| (comment_key(c.id), comment_record(s.id, c))));
     out
 }
 
@@ -267,6 +304,15 @@ impl Session {
         self.collab.as_mut().map(|c| &mut c.shared)
     }
 
+    /// The name a new comment carries: this author's name on the shared deck, else the
+    /// author set in the preferences.
+    pub fn comment_author(&self) -> String {
+        match self.collab.as_ref().filter(|_| self.collab_on_active()) {
+            Some(c) if !c.shared.name().is_empty() => c.shared.name().to_string(),
+            _ => self.prefs.author.clone(),
+        }
+    }
+
     /// Whether a presentation is shared.
     pub fn collab_active(&self) -> bool {
         self.collab.is_some()
@@ -288,6 +334,7 @@ impl Session {
         deck.set_author_tag(tag);
         if !shared.awaiting_snapshot() && !shared.awaiting_grant() {
             deck.ensure_pids();
+            deck.ensure_comment_ids();
             let texts = shared.texts_mut();
             let mut updates = Vec::new();
             let mut entries = Vec::new();
@@ -302,6 +349,10 @@ impl Session {
                 updates.extend(texts.list_seed(&z_list(s.id.0), &z));
                 for sh in &s.shapes {
                     updates.extend(texts.seed_named_body(&sh.id.0.to_string(), &body_of(sh)));
+                }
+                updates.extend(texts.list_seed(&comments_list(s.id.0), &ids_of(&s.comments)));
+                for c in &s.comments {
+                    updates.extend(texts.list_seed(&replies_list(c.id), &ids_of(&c.replies)));
                 }
             }
             texts.register_changed();
@@ -375,7 +426,9 @@ impl Session {
                 "this change isn't shared yet: only slides, their shapes and their text travel".into()
             });
         }
-        Arc::make_mut(&mut st.doc).ensure_pids();
+        let deck = Arc::make_mut(&mut st.doc);
+        deck.ensure_pids();
+        deck.ensure_comment_ids();
         let new = st.doc.clone();
         let texts = c.shared.texts_mut();
         texts.begin_step();
@@ -400,6 +453,21 @@ impl Session {
             }
             let z: Vec<String> = s.shapes.iter().map(|sh| sh.id.0.to_string()).collect();
             cap.list(&z_list(s.id.0), &z);
+            let was: Vec<&Comment> = before.map(|b| all_comments(b)).unwrap_or_default();
+            for cm in all_comments(s) {
+                if was.iter().find(|w| w.id == cm.id).is_none_or(|w| comment_record(s.id, w) != comment_record(s.id, cm)) {
+                    cap.set(&comment_key(cm.id), &comment_record(s.id, cm));
+                }
+            }
+            if before.is_none_or(|b| ids_of(&b.comments) != ids_of(&s.comments)) {
+                cap.list(&comments_list(s.id.0), &ids_of(&s.comments));
+            }
+            for cm in &s.comments {
+                let held = before.and_then(|b| b.comments.iter().find(|w| w.id == cm.id));
+                if held.is_none_or(|w| ids_of(&w.replies) != ids_of(&cm.replies)) {
+                    cap.list(&replies_list(cm.id), &ids_of(&cm.replies));
+                }
+            }
         }
         cap.list(SLIDES, &ids);
         let updates = std::mem::take(&mut cap.updates);
@@ -557,6 +625,10 @@ impl Session {
                     // The slide it was on, if it moved.
                     dirty.extend(st.doc.slides.iter().filter(|s| s.shape(ShapeId(id)).is_some()).map(|s| s.id.0));
                 }
+                (Some("m"), Some(_)) => {
+                    let slide = texts.register_get(key).and_then(|v| serde_json::from_str::<Value>(&v).ok()).and_then(|v| v.get("slide")?.as_u64());
+                    dirty.extend(slide);
+                }
                 (Some("p"), Some(_)) => {
                     let shape = texts.register_get(key).and_then(|v| serde_json::from_str::<Value>(&v).ok()).and_then(|v| v.get("shape")?.as_u64());
                     dirty.extend(shape.and_then(slide_of_shape));
@@ -565,7 +637,12 @@ impl Session {
             }
         }
         dirty.extend(bodies.iter().filter_map(|b| b.parse::<u64>().ok()).filter_map(slide_of_shape));
-        dirty.extend(lists.iter().filter_map(|l| l.strip_prefix("z/")?.parse::<u64>().ok()));
+        dirty.extend(lists.iter().filter_map(|l| l.strip_prefix("z/").or_else(|| l.strip_prefix("c/"))?.parse::<u64>().ok()));
+        let slide_of_comment = |comment: u64| -> Option<u64> {
+            let record: Value = serde_json::from_str(&texts.register_get(&comment_key(comment))?).ok()?;
+            record.get("slide")?.as_u64()
+        };
+        dirty.extend(lists.iter().filter_map(|l| l.strip_prefix("r/")?.parse::<u64>().ok()).filter_map(slide_of_comment));
         let order = lists.iter().any(|l| l == SLIDES);
         let old = st.doc.clone();
         let mut deck = (*old).clone();
@@ -651,7 +728,24 @@ impl Session {
 fn project_slide(texts: &TextMerge, id: u64) -> Option<Slide> {
     let mut slide: Slide = serde_json::from_str(&texts.register_get(&slide_key(id))?).ok()?;
     slide.shapes = texts.list_ids(&z_list(id)).iter().filter_map(|s| s.parse::<u64>().ok()).filter_map(|sh| project_shape(texts, sh)).collect();
+    slide.comments = texts
+        .list_ids(&comments_list(id))
+        .iter()
+        .filter_map(|c| c.parse::<u64>().ok())
+        .filter_map(|c| {
+            let mut thread = project_comment(texts, c)?;
+            thread.replies =
+                texts.list_ids(&replies_list(c)).iter().filter_map(|r| r.parse::<u64>().ok()).filter_map(|r| project_comment(texts, r)).collect();
+            Some(thread)
+        })
+        .collect();
     Some(slide)
+}
+
+/// A comment as the shared document holds it, without its replies.
+fn project_comment(texts: &TextMerge, id: u64) -> Option<Comment> {
+    let record: Value = serde_json::from_str(&texts.register_get(&comment_key(id))?).ok()?;
+    serde_json::from_value(record.get("comment")?.clone()).ok()
 }
 
 /// A shape as the shared document holds it: its record, with its text frame's paragraphs from
@@ -866,6 +960,93 @@ mod tests {
         let peers = b.collab_peers();
         assert_eq!(peers.len(), 1);
         assert_eq!(peers[0].2.as_ref().map(|(slide, _)| *slide), Some(1));
+    }
+
+    /// Every comment thread on a slide as both authors must agree on it: id, author, text,
+    /// resolved, and its replies the same way.
+    fn threads(s: &Session, slide: usize) -> Vec<(u64, String, String, bool, Vec<(u64, String, String)>)> {
+        deck(s).slides[slide]
+            .comments
+            .iter()
+            .map(|c| {
+                (c.id, c.author.clone(), c.text.clone(), c.resolved, c.replies.iter().map(|r| (r.id, r.author.clone(), r.text.clone())).collect())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn two_comments_at_once_on_one_slide_are_both_kept_with_their_authors() {
+        let (mut a, mut b) = two_authors();
+        a.execute("comment.add", &json!({"text": "from Ann"})).unwrap();
+        b.execute("comment.add", &json!({"text": "from Bob"})).unwrap();
+        settle(&mut a, &mut b);
+        assert_eq!(threads(&a, 0), threads(&b, 0));
+        let t = threads(&a, 0);
+        assert_eq!(t.len(), 2, "neither comment was lost: {t:?}");
+        assert_ne!(t[0].0, t[1].0, "distinct ids");
+        let mut by: Vec<(String, String)> = t.iter().map(|c| (c.1.clone(), c.2.clone())).collect();
+        by.sort();
+        assert_eq!(by, vec![("Ann".into(), "from Ann".into()), ("Bob".into(), "from Bob".into())], "each comment carries its author's name");
+    }
+
+    #[test]
+    fn a_reply_and_a_resolve_at_once_on_one_thread_both_land() {
+        let (mut a, mut b) = two_authors();
+        let shape = deck(&a).slides[0].shapes[0].id.0;
+        a.execute("comment.add", &json!({"text": "Is this right?", "id": shape})).unwrap();
+        settle(&mut a, &mut b);
+        b.execute("comment.reply", &json!({"index": 0, "text": "Yes"})).unwrap();
+        a.execute("comment.resolve", &json!({"index": 0})).unwrap();
+        settle(&mut a, &mut b);
+        assert_eq!(threads(&a, 0), threads(&b, 0));
+        let t = &threads(&b, 0)[0];
+        assert!(t.3, "the resolve travelled");
+        assert_eq!(
+            t.4.iter().map(|r| (r.1.as_str(), r.2.as_str())).collect::<Vec<_>>(),
+            vec![("Bob", "Yes")],
+            "the reply travelled under its author"
+        );
+        assert_eq!(deck(&b).slides[0].comments[0].shape, Some(ShapeId(shape)), "still on its shape");
+    }
+
+    #[test]
+    fn two_replies_at_once_are_both_kept() {
+        let (mut a, mut b) = two_authors();
+        a.execute("comment.add", &json!({"text": "Thoughts?"})).unwrap();
+        settle(&mut a, &mut b);
+        a.execute("comment.reply", &json!({"index": 0, "text": "Ann adds"})).unwrap();
+        b.execute("comment.reply", &json!({"index": 0, "text": "Bob adds"})).unwrap();
+        settle(&mut a, &mut b);
+        assert_eq!(threads(&a, 0), threads(&b, 0));
+        assert_eq!(threads(&a, 0)[0].4.len(), 2, "{:?}", threads(&a, 0));
+    }
+
+    #[test]
+    fn undo_takes_back_only_this_authors_comment() {
+        let (mut a, mut b) = two_authors();
+        b.execute("comment.add", &json!({"text": "Bob's"})).unwrap();
+        settle(&mut a, &mut b);
+        a.execute("comment.add", &json!({"text": "Ann's"})).unwrap();
+        settle(&mut a, &mut b);
+        a.execute("edit.undo", &json!({})).unwrap();
+        settle(&mut a, &mut b);
+        assert_eq!(threads(&a, 0), threads(&b, 0));
+        assert_eq!(threads(&b, 0).iter().map(|c| c.2.as_str()).collect::<Vec<_>>(), vec!["Bob's"]);
+    }
+
+    #[test]
+    fn a_comment_from_before_sharing_reaches_the_joiner() {
+        let (ta, tb) = MemoryTransport::pair(A, B);
+        let mut a = Session::with_new();
+        a.execute("comment.add", &json!({"text": "written alone"})).unwrap();
+        a.collab_install(CollabSession::host("deck", "Ann", Box::new(ta), &[])).unwrap();
+        let mut b = Session::with_new();
+        b.collab_install(CollabSession::join("deck", "Bob", Box::new(tb))).unwrap();
+        settle(&mut a, &mut b);
+        b.execute("comment.reply", &json!({"index": 0, "text": "seen"})).unwrap();
+        settle(&mut a, &mut b);
+        assert_eq!(threads(&a, 0), threads(&b, 0));
+        assert_eq!(threads(&a, 0)[0].4.len(), 1);
     }
 
     #[test]

@@ -606,6 +606,7 @@ fn read_comments(pkg: &Package, pres: &Part, root: &El) -> Vec<Comment> {
             vec![]
         };
         Comment {
+            id: 0,
             author,
             initials,
             text,
