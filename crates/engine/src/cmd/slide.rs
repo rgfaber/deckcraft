@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
 /// Resolve a layout by id, name or kind keyword.
 pub fn find_layout(doc: &Presentation, key: &Value, master: usize) -> Option<LayoutId> {
     if let Some(n) = key.as_u64() {
-        let id = LayoutId(u32::try_from(n).ok()?);
+        let id = LayoutId(n);
         if doc.layout(id).is_some() {
             return Some(id);
         }
@@ -211,7 +211,7 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     let ids: Vec<SlideId> = {
         let st = s.doc()?;
         if let Some(a) = p.get("ids").and_then(Value::as_array) {
-            a.iter().filter_map(Value::as_u64).filter_map(|v| u32::try_from(v).ok()).map(SlideId).collect()
+            a.iter().filter_map(Value::as_u64).map(SlideId).collect()
         } else if let Some(i) = usize_param(p, "index") {
             st.doc.slides.get(i).map(|x| vec![x.id]).unwrap_or_default()
         } else if !st.selection.slides.is_empty() {
@@ -283,7 +283,7 @@ fn go_to(s: &mut Session, i: usize) -> Result<Value> {
 fn go(s: &mut Session, p: &Value) -> Result<Value> {
     let i = match (usize_param(p, "index"), p.get("id").and_then(Value::as_u64)) {
         (Some(i), _) => i,
-        (None, Some(id)) => s.doc()?.doc.slide_index(SlideId(u32::try_from(id).unwrap_or(0))).ok_or_else(|| bad("slide.go", "no such slide"))?,
+        (None, Some(id)) => s.doc()?.doc.slide_index(SlideId(id)).ok_or_else(|| bad("slide.go", "no such slide"))?,
         _ => return Err(bad("slide.go", "missing `index`")),
     };
     go_to(s, i)
@@ -308,11 +308,8 @@ fn select_slides(s: &mut Session, p: &Value) -> Result<Value> {
     let add = bool_or(p, "add", false);
     let ids: Vec<SlideId> = {
         let st = s.doc()?;
-        let mut v: Vec<SlideId> = p
-            .get("ids")
-            .and_then(Value::as_array)
-            .map(|a| a.iter().filter_map(Value::as_u64).filter_map(|x| u32::try_from(x).ok()).map(SlideId).collect())
-            .unwrap_or_default();
+        let mut v: Vec<SlideId> =
+            p.get("ids").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).map(SlideId).collect()).unwrap_or_default();
         if let Some(a) = p.get("indices").and_then(Value::as_array) {
             v.extend(a.iter().filter_map(Value::as_u64).filter_map(|i| st.doc.slides.get(i as usize)).map(|x| x.id));
         }

@@ -701,7 +701,7 @@ impl Session {
                         };
                         let r = self.execute("shape.insert", &json!({"preset": preset, "rect": [rect.x, rect.y, rect.w, rect.h], "flip": format!("{}{}", if rect.flip_h { "h" } else { "" }, if rect.flip_v { "v" } else { "" })}))?;
                         if let (Some(id), Some(x)) = (r.get("id").and_then(Value::as_u64), preview.filter(|_| dragged && line)) {
-                            let id = ShapeId(id as u32);
+                            let id = ShapeId(id);
                             let _ = self.set_xfrm_cmd(id, x);
                             // Glue the ends that landed on connection sites.
                             let (p0, p1) = crate::connect::endpoints(&x);

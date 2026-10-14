@@ -227,7 +227,7 @@ fn timing(s: &mut Session, p: &Value) -> Result<Value> {
     let delay = p.get("delay").and_then(Value::as_u64).map(|v| v.min(600_000) as u32);
     let repeat = p.get("repeat").and_then(Value::as_u64).map(|v| v.min(u32::MAX as u64) as u32);
     let rewind = bool_param(p, "rewind");
-    let trigger = p.get("trigger").map(|v| v.as_u64().and_then(|x| u32::try_from(x).ok()).map(deckcraft_model::ShapeId));
+    let trigger = p.get("trigger").map(|v| v.as_u64().map(deckcraft_model::ShapeId));
     each_target(s, p, |a| {
         if let Some(x) = start {
             a.start = x;

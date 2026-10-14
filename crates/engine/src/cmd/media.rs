@@ -186,11 +186,11 @@ mod tests {
         let id = r["id"].as_u64().expect("id");
         s.ui_requests.clear();
         s.execute("media.play", &json!({"from": 100})).expect("play");
-        assert_eq!(s.ui_requests, vec![UiRequest::Media { action: "play".into(), shape: ShapeId(id as u32), ms: Some(100) }]);
+        assert_eq!(s.ui_requests, vec![UiRequest::Media { action: "play".into(), shape: ShapeId(id), ms: Some(100) }]);
         s.execute("media.seek", &json!({"id": id, "ms": 250})).expect("seek");
         assert!(s.execute("media.seek", &json!({"id": id})).is_err());
         // The host reports state; media.info returns it with the probe.
-        s.media_status.insert(ShapeId(id as u32), MediaStatus { state: "playing".into(), position_ms: 250, duration_ms: 500, error: None });
+        s.media_status.insert(ShapeId(id), MediaStatus { state: "playing".into(), position_ms: 250, duration_ms: 500, error: None });
         let i = s.execute("media.info", &json!({})).expect("info");
         assert_eq!(i["probe"]["audio"]["sampleRate"], 8000);
         assert_eq!(i["probe"]["container"], "wav");

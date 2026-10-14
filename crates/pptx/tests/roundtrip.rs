@@ -711,3 +711,23 @@ fn rtl_paragraphs_script_fonts_and_just_low_round_trip() {
     assert_eq!(para.props.align, Some(Align::JustLow));
     assert_eq!(para.runs[0].text, "سنة 2024 (Retrait) فقط");
 }
+
+#[test]
+fn author_scoped_ids_export_as_valid_file_ids() {
+    let mut p = defaults::new_presentation(None);
+    p.set_author_tag(9);
+    let mut s = new_slide(&mut p, "Shared");
+    let a = shape(&mut p, "From", 100.0, 100.0, 100.0, 50.0);
+    let b = shape(&mut p, "To", 400.0, 100.0, 100.0, 50.0);
+    let mut c = shape(&mut p, "Link", 200.0, 125.0, 200.0, 0.0);
+    assert!(a.id.0 > u64::from(u32::MAX), "an author id does not fit a cNvPr id");
+    c.kind = ShapeKind::Connector { start: Some((a.id, 3)), end: Some((b.id, 1)) };
+    s.shapes.extend([a, b, c]);
+    p.slides.push(Arc::new(s));
+    let q = round(&p);
+    let s = q.slides.last().expect("slide");
+    let (from, to) = (by_name(s, "From").id, by_name(s, "To").id);
+    assert_ne!(from, to);
+    let ShapeKind::Connector { start, end } = &by_name(s, "Link").kind else { panic!("not a connector") };
+    assert_eq!((*start, *end), (Some((from, 3)), Some((to, 1))), "connection ends follow the renumbered shapes");
+}

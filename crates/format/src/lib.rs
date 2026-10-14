@@ -230,6 +230,39 @@ mod tests {
         assert_eq!(serde_json::to_value(&q.slides).unwrap(), serde_json::to_value(&p.slides).unwrap());
     }
 
+    /// A deck saved before ids were author-scoped (u32 ids, one counter).
+    const PRE_AUTHOR_IDS: &[u8] = include_bytes!("../tests/fixtures/pre_author_ids.deckcraft");
+
+    fn presentation_json(bytes: &[u8]) -> serde_json::Value {
+        let mut z = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let m: serde_json::Value = serde_json::from_slice(&read_entry(&mut z, "presentation.json").unwrap()).unwrap();
+        m["presentation"].clone()
+    }
+
+    #[test]
+    fn a_deck_from_before_author_ids_keeps_its_ids() {
+        let p = load(PRE_AUTHOR_IDS).unwrap();
+        let slides: Vec<u64> = p.slides.iter().map(|s| s.id.0).collect();
+        assert_eq!(slides, vec![257, 260, 263]);
+        assert_eq!(p.media.iter().map(|m| m.id.0).collect::<Vec<_>>(), vec![266]);
+        assert!(p.author_next.is_empty());
+        assert_eq!(presentation_json(&save(&p).unwrap()), presentation_json(PRE_AUTHOR_IDS), "saves back unchanged");
+    }
+
+    #[test]
+    fn an_old_deck_edited_by_an_author_keeps_both_counters() {
+        let mut p = load(PRE_AUTHOR_IDS).unwrap();
+        p.set_author_tag(3);
+        let id = deckcraft_model::SlideId(p.alloc_id());
+        p.slides.push(Arc::new(deckcraft_model::Slide { id, layout: p.slides[0].layout, ..Default::default() }));
+        let mut q = load(&save(&p).unwrap()).unwrap();
+        assert_eq!(q.author_tag, 0, "the tag belongs to the replica, not the file");
+        assert_eq!(q.author_next.get(&3), Some(&1));
+        assert_eq!(q.alloc_id(), 267, "the solo counter carries on where the old deck stopped");
+        q.set_author_tag(3);
+        assert_eq!(q.alloc_id(), deckcraft_model::author_id(3, 2));
+    }
+
     #[test]
     fn garbage_is_an_error_not_a_panic() {
         assert!(load(b"").is_err());

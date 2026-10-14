@@ -551,7 +551,7 @@ fn context_menu(app: &mut SlideApp, resp: &egui::Response) {
             }
         } else {
             ui.menu_button("Layout", |ui| {
-                let layouts: Vec<(String, u32)> = app
+                let layouts: Vec<(String, u64)> = app
                     .session
                     .active()
                     .and_then(|d| d.doc.masters.first().map(|m| m.layouts.iter().map(|l| (l.name.clone(), l.id.0)).collect()))

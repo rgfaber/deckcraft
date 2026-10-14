@@ -172,10 +172,10 @@ pub(crate) fn usize_param(p: &Value, key: &str) -> Option<usize> {
     p.get(key).and_then(Value::as_u64).and_then(|v| usize::try_from(v).ok())
 }
 pub(crate) fn id_param(p: &Value, key: &str) -> Option<ShapeId> {
-    p.get(key).and_then(Value::as_u64).and_then(|v| u32::try_from(v).ok()).map(ShapeId)
+    p.get(key).and_then(Value::as_u64).map(ShapeId)
 }
 pub(crate) fn ids_param(p: &Value, key: &str) -> Option<Vec<ShapeId>> {
-    p.get(key).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).filter_map(|v| u32::try_from(v).ok()).map(ShapeId).collect())
+    p.get(key).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).map(ShapeId).collect())
 }
 /// `[x, y, w, h]` in points.
 pub(crate) fn rect_param(p: &Value, key: &str) -> Option<Xfrm> {

@@ -46,7 +46,7 @@ pub fn open_sample(s: &mut Session) -> Result<()> {
     run(s, "slide.new", json!({"layout": "sectionHeader", "title": "The Science", "body": "Charged particles, magnetic fields and glowing gases"}))?;
     run(s, "design.background", json!({"color": "dk2"}))?;
     let st = s.doc()?;
-    let ids: Vec<u64> = st.current_slide().map(|x| x.shapes.iter().map(|s| s.id.0 as u64).collect()).unwrap_or_default();
+    let ids: Vec<u64> = st.current_slide().map(|x| x.shapes.iter().map(|s| s.id.0).collect()).unwrap_or_default();
     run(s, "edit.select", json!({"ids": ids}))?;
     run(s, "format.color", json!({"color": "#FFFFFF"}))?;
     run(s, "transition.set", json!({"kind": "wipe", "option": "r"}))?;

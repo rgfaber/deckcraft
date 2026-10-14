@@ -17,6 +17,7 @@ pub mod table;
 pub mod text;
 pub mod theme;
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 pub use deckcraft_color::{ColorScheme, ColorTransform, Rgba, SchemeSlot};
@@ -38,7 +39,7 @@ macro_rules! id_type {
     ($name:ident) => {
         #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
         #[serde(transparent)]
-        pub struct $name(pub u32);
+        pub struct $name(pub u64);
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, "{}", self.0)
@@ -46,6 +47,23 @@ macro_rules! id_type {
         }
     };
 }
+/// Bits in an author tag. A tag above 21 bits would push ids past 2^53, which JSON numbers
+/// in JS clients cannot hold exactly.
+pub const AUTHOR_TAG_BITS: u32 = 21;
+const AUTHOR_TAG_MASK: u32 = (1 << AUTHOR_TAG_BITS) - 1;
+
+/// The id an author mints as its `n`th: `(tag << 32) | n`. Tag 0 is a document that was never
+/// shared, so every id from before co-authoring keeps its value. The same rule names GridCraft's
+/// sheets, and the collaboration seam carries these ids as decimal strings.
+pub fn author_id(tag: u32, n: u32) -> u64 {
+    (u64::from(tag & AUTHOR_TAG_MASK) << 32) | u64::from(n)
+}
+
+/// An id's author tag and counter.
+pub fn split_id(id: u64) -> (u32, u32) {
+    ((id >> 32) as u32 & AUTHOR_TAG_MASK, id as u32)
+}
+
 id_type!(SlideId);
 id_type!(ShapeId);
 id_type!(LayoutId);
@@ -774,8 +792,15 @@ pub struct Presentation {
     pub default_text_style: text::ListStyle,
     pub media: Vec<MediaItem>,
     pub first_slide_number: u32,
-    /// Next free shape/slide/layout/media id.
+    /// Last counter used for ids under author tag 0, the never-shared document.
     pub next_id: u32,
+    /// Last counter used per author tag for every other tag, so an id is never minted
+    /// twice even after the item it named is deleted.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub author_next: BTreeMap<u32, u32>,
+    /// This replica's author tag. Set by the session, never saved: see [`author_id`].
+    #[serde(skip)]
+    pub author_tag: u32,
     /// Embedded fonts (family names; bytes in `media`).
     pub embedded_fonts: Vec<(String, MediaId)>,
     /// Unmodelled presentation-level XML kept for round-trip.
@@ -790,30 +815,43 @@ impl Default for Presentation {
 }
 
 impl Presentation {
-    /// A fresh id, unique across slides, shapes, layouts, masters and media in this deck.
-    pub fn alloc_id(&mut self) -> u32 {
-        self.next_id = self.next_id.max(1).saturating_add(1);
-        self.next_id
+    /// A fresh id, unique across slides, shapes, layouts, masters and media in this deck,
+    /// and across authors: it carries this replica's [`Presentation::author_tag`].
+    pub fn alloc_id(&mut self) -> u64 {
+        let tag = self.author_tag & AUTHOR_TAG_MASK;
+        if tag == 0 {
+            self.next_id = self.next_id.max(1).saturating_add(1);
+            return author_id(0, self.next_id);
+        }
+        let n = self.author_next.entry(tag).or_insert(0);
+        *n = n.saturating_add(1);
+        author_id(tag, *n)
     }
-    /// Make sure `next_id` is above every id in use (after loading a file).
+    /// Set the author tag new ids carry (masked to [`AUTHOR_TAG_BITS`]).
+    pub fn set_author_tag(&mut self, tag: u32) {
+        self.author_tag = tag & AUTHOR_TAG_MASK;
+    }
+    /// Make sure every counter is above every id in use under its tag (after loading a file).
     pub fn fix_next_id(&mut self) {
-        let mut m = self.next_id;
+        let mut ids = Vec::new();
         for s in &self.slides {
-            m = m.max(s.id.0);
-            walk(&s.shapes, &mut |sh, _| m = m.max(sh.id.0));
+            ids.push(s.id.0);
+            walk(&s.shapes, &mut |sh, _| ids.push(sh.id.0));
         }
         for ma in &self.masters {
-            m = m.max(ma.id.0);
-            walk(&ma.shapes, &mut |sh, _| m = m.max(sh.id.0));
+            ids.push(ma.id.0);
+            walk(&ma.shapes, &mut |sh, _| ids.push(sh.id.0));
             for l in &ma.layouts {
-                m = m.max(l.id.0);
-                walk(&l.shapes, &mut |sh, _| m = m.max(sh.id.0));
+                ids.push(l.id.0);
+                walk(&l.shapes, &mut |sh, _| ids.push(sh.id.0));
             }
         }
-        for md in &self.media {
-            m = m.max(md.id.0);
+        ids.extend(self.media.iter().map(|md| md.id.0));
+        for id in ids {
+            let (tag, n) = split_id(id);
+            let slot = if tag == 0 { &mut self.next_id } else { self.author_next.entry(tag).or_insert(0) };
+            *slot = (*slot).max(n);
         }
-        self.next_id = m;
     }
     pub fn slide_index(&self, id: SlideId) -> Option<usize> {
         self.slides.iter().position(|s| s.id == id)

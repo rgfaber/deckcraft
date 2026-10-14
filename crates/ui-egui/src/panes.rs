@@ -462,8 +462,8 @@ fn animation(app: &mut SlideApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else { return };
     let Some(slide) = st.current_slide() else { return };
     let anims = slide.animations.clone();
-    let names: Vec<(u32, String)> = st.shapes().iter().map(|s| (s.id.0, s.name.clone())).collect();
-    let selected: Vec<u32> = st.selection.shapes.iter().map(|i| i.0).collect();
+    let names: Vec<(u64, String)> = st.shapes().iter().map(|s| (s.id.0, s.name.clone())).collect();
+    let selected: Vec<u64> = st.selection.shapes.iter().map(|i| i.0).collect();
     ui.horizontal(|ui| {
         if ui.button("▶ Play All").clicked() {
             let from = app.session.active().map(|d| d.selection.slide).unwrap_or(0);
@@ -552,16 +552,16 @@ fn animation(app: &mut SlideApp, ui: &mut Ui) {
 fn selection(app: &mut SlideApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some(st) = app.session.active() else { return };
-    let shapes: Vec<(u32, String, bool, &'static str)> =
+    let shapes: Vec<(u64, String, bool, &'static str)> =
         st.shapes().iter().rev().map(|s| (s.id.0, s.name.clone(), s.hidden, s.kind_name())).collect();
-    let selected: Vec<u32> = st.selection.shapes.iter().map(|i| i.0).collect();
+    let selected: Vec<u64> = st.selection.shapes.iter().map(|i| i.0).collect();
     ui.horizontal(|ui| {
         if ui.button("Show All").clicked() {
-            let ids: Vec<u32> = shapes.iter().map(|s| s.0).collect();
+            let ids: Vec<u64> = shapes.iter().map(|s| s.0).collect();
             run(app, "shape.visible", json!({"ids": ids, "visible": true}));
         }
         if ui.button("Hide All").clicked() {
-            let ids: Vec<u32> = shapes.iter().map(|s| s.0).collect();
+            let ids: Vec<u64> = shapes.iter().map(|s| s.0).collect();
             run(app, "shape.visible", json!({"ids": ids, "visible": false}));
         }
     });

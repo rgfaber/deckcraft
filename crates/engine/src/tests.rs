@@ -251,7 +251,7 @@ fn themes_and_slide_size() {
 
 fn line_ends(s: &Session, id: u64) -> (deckcraft_geom::Point, deckcraft_geom::Point) {
     let st = s.doc().unwrap();
-    let sh = st.shape(deckcraft_model::ShapeId(id as u32)).unwrap();
+    let sh = st.shape(deckcraft_model::ShapeId(id)).unwrap();
     connect::endpoints(&cmd::xfrm_of(&st.doc, &st.selection, sh))
 }
 
@@ -279,7 +279,7 @@ fn connectors_follow_glued_shapes() {
     s.execute("edit.select", &json!({"ids": [a]})).unwrap();
     s.execute("edit.delete", &json!({})).unwrap();
     let st = s.doc().unwrap();
-    let sh = st.shape(deckcraft_model::ShapeId(c as u32)).unwrap();
+    let sh = st.shape(deckcraft_model::ShapeId(c)).unwrap();
     assert!(matches!(sh.kind, deckcraft_model::ShapeKind::Connector { start: None, end: Some(_) }));
 }
 
@@ -302,11 +302,11 @@ fn drawing_a_line_between_shapes_glues_it() {
     let line = st.shapes().iter().find(|x| x.is_line()).unwrap();
     match line.kind {
         deckcraft_model::ShapeKind::Connector { start: Some((x, _)), end: Some((y, _)) } => {
-            assert_eq!((x.0 as u64, y.0 as u64), (a, b));
+            assert_eq!((x.0, y.0), (a, b));
         }
         ref k => panic!("not glued: {k:?}"),
     }
-    let id = line.id.0 as u64;
+    let id = line.id.0;
     let (p0, p1) = line_ends(&s, id);
     assert!((p0.x - 200.0).abs() < 1e-6 && (p1.x - 400.0).abs() < 1e-6, "{p0:?} {p1:?}");
 }
@@ -359,7 +359,7 @@ fn freeform_tools_and_command() {
         s.pointer(ev(tools::PointerKind::Up, x, y)).unwrap();
     }
     let r = s.key("Enter", Default::default()).unwrap();
-    let id = deckcraft_model::ShapeId(r["id"].as_u64().unwrap() as u32);
+    let id = deckcraft_model::ShapeId(r["id"].as_u64().unwrap());
     let st = s.doc().unwrap();
     match &st.shape(id).unwrap().geom {
         deckcraft_model::Geom::Custom { paths } => assert_eq!(paths[0].d.matches(" C ").count(), 3),

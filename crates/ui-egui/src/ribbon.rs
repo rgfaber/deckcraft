@@ -1616,7 +1616,7 @@ fn animations(app: &mut SlideApp, ui: &mut Ui) {
             if ui.button("On Click of… (none)").clicked() {
                 run(app, "animation.timing", json!({"trigger": null}));
             }
-            let shapes: Vec<(u32, String)> =
+            let shapes: Vec<(u64, String)> =
                 app.session.active().map(|d| d.shapes().iter().map(|s| (s.id.0, s.name.clone())).collect()).unwrap_or_default();
             for (id, name) in shapes {
                 if ui.button(format!("On Click of {name}")).clicked() {

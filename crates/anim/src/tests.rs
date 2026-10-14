@@ -12,11 +12,11 @@ use crate::*;
 const W: f64 = 960.0;
 const H: f64 = 540.0;
 
-fn shape(id: u32, name: &str) -> Shape {
+fn shape(id: u64, name: &str) -> Shape {
     Shape { id: ShapeId(id), name: name.into(), xfrm: Some(Xfrm::new(100.0, 100.0, 200.0, 100.0)), ..Default::default() }
 }
 
-fn anim(shape: u32, class: AnimClass, effect: &str, start: AnimStart) -> Animation {
+fn anim(shape: u64, class: AnimClass, effect: &str, start: AnimStart) -> Animation {
     Animation { shape: ShapeId(shape), class, effect: effect.into(), start, duration_ms: 1000, ..Default::default() }
 }
 
@@ -617,7 +617,7 @@ fn morph_frame_lists_texts_for_words_and_characters() {
 }
 
 fn pres(n: usize) -> Presentation {
-    Presentation { slides: (0..n).map(|i| Arc::new(Slide { id: SlideId(1000 + i as u32), ..Default::default() })).collect(), ..Default::default() }
+    Presentation { slides: (0..n).map(|i| Arc::new(Slide { id: SlideId(1000 + i as u64), ..Default::default() })).collect(), ..Default::default() }
 }
 
 #[test]

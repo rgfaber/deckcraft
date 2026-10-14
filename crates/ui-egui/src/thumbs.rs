@@ -138,7 +138,7 @@ fn list(app: &mut SlideApp, ui: &mut Ui) {
                     let _ = app.run("slide.selectSlides", json!({"ids": [id.0], "add": true}));
                 } else if shift {
                     let (a, b) = (cur.min(i), cur.max(i));
-                    let ids: Vec<u32> = doc.slides.iter().skip(a).take(b - a + 1).map(|s| s.id.0).collect();
+                    let ids: Vec<u64> = doc.slides.iter().skip(a).take(b - a + 1).map(|s| s.id.0).collect();
                     let _ = app.run("slide.selectSlides", json!({"ids": ids}));
                     let _ = app.run("slide.go", json!({"index": i}));
                     let _ = app.run("slide.selectSlides", json!({"ids": ids}));
@@ -226,7 +226,7 @@ pub fn slide_menu(app: &mut SlideApp, ui: &mut Ui, i: usize) {
         ui.close();
     }
     ui.menu_button("Layout", |ui| {
-        let layouts: Vec<(String, u32)> = app
+        let layouts: Vec<(String, u64)> = app
             .session
             .active()
             .and_then(|d| d.doc.masters.first().map(|m| m.layouts.iter().map(|l| (l.name.clone(), l.id.0)).collect()))

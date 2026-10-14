@@ -10,6 +10,10 @@ lines: one request object per line, one reply per line.
 
 Coordinates are slide points (1/72 inch; a 16:9 slide is 960 × 540) unless noted.
 
+Slide, shape, layout and media ids are integers below 2^53, so a JSON number holds them exactly in
+any client. A deck that was never shared uses small ids; when several authors edit one deck, each
+author's new ids carry that author's tag in the bits above 32 and never collide.
+
 | Method | Params | What it does |
 |---|---|---|
 | `engine.execute` / `ui.menu.invoke` / `command` | `{command, params}` | Run any command (see `engine.commands`; `deckcraft-cli describe ID` documents one) |

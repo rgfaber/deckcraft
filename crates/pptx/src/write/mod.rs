@@ -269,7 +269,7 @@ fn ext_children(raw: Option<&str>) -> Option<String> {
 fn notes_master_shapes(size: deckcraft_geom::Size) -> Vec<Shape> {
     let (w, h) = (size.width, size.height);
     let mk = |id: u32, name: &str, kind: PhType, idx: u32, x: f64, y: f64, ww: f64, hh: f64| Shape {
-        id: ShapeId(id),
+        id: ShapeId(u64::from(id)),
         name: name.into(),
         xfrm: Some(Xfrm::new(x, y, ww, hh)),
         ph: Some(Placeholder { kind, idx, size: (kind != PhType::SlideImage).then(|| "quarter".to_string()), ..Default::default() }),
@@ -337,10 +337,10 @@ fn sanitized(p: &Presentation) -> std::borrow::Cow<'_, Presentation> {
         q.next_id = next;
         q.masters.push(Arc::new(m));
     }
-    for m in q.masters.iter_mut() {
-        if m.layouts.is_empty() {
-            let id = LayoutId(q.next_id.saturating_add(1));
-            q.next_id = id.0;
+    for i in 0..q.masters.len() {
+        if q.masters.get(i).is_some_and(|m| m.layouts.is_empty()) {
+            let id = LayoutId(q.alloc_id());
+            let Some(m) = q.masters.get_mut(i) else { continue };
             Arc::make_mut(m).layouts.push(Layout {
                 id,
                 name: "Blank".into(),

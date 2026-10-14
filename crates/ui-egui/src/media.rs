@@ -40,7 +40,7 @@ impl Default for MediaHost {
 }
 
 fn key(id: ShapeId) -> u64 {
-    id.0 as u64
+    id.0
 }
 
 impl MediaHost {

@@ -164,7 +164,7 @@ pub fn morph_frame(pres: &Presentation, a: &Slide, b: &Slide, t: f64, hidden_b: 
     let ca = Ctx::for_slide(pres, a);
     let cb = Ctx::for_slide(pres, b);
     let pairs: Vec<(ShapeId, ShapeId)> = morph_pairs(a, b).into_iter().filter(|(_, ib)| !hidden_b(*ib)).collect();
-    let mut next = 1u32;
+    let mut next = 1u64;
     walk(&a.shapes, &mut |x, _| next = next.max(x.id.0.saturating_add(1)));
     walk(&b.shapes, &mut |x, _| next = next.max(x.id.0.saturating_add(1)));
     let mut f = MorphFrame { mix: s, ..Default::default() };

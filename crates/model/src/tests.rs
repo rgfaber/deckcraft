@@ -81,7 +81,7 @@ fn ids_are_unique_and_fix_next_id() {
     assert!(b > a);
     p.next_id = 0;
     p.fix_next_id();
-    assert!(p.next_id >= b.min(p.next_id));
+    assert!(u64::from(p.next_id) >= b.min(u64::from(p.next_id)));
     let c = p.alloc_id();
     let mut all = vec![];
     for s in &p.slides {
@@ -89,6 +89,96 @@ fn ids_are_unique_and_fix_next_id() {
         walk(&s.shapes, &mut |sh, _| all.push(sh.id.0));
     }
     assert!(!all.contains(&c));
+}
+
+/// Every id in a deck: slides, shapes, masters, layouts and media.
+fn every_id(p: &Presentation) -> Vec<u64> {
+    let mut ids = vec![];
+    for s in &p.slides {
+        ids.push(s.id.0);
+        walk(&s.shapes, &mut |sh, _| ids.push(sh.id.0));
+    }
+    for m in &p.masters {
+        ids.push(m.id.0);
+        walk(&m.shapes, &mut |sh, _| ids.push(sh.id.0));
+        for l in &m.layouts {
+            ids.push(l.id.0);
+            walk(&l.shapes, &mut |sh, _| ids.push(sh.id.0));
+        }
+    }
+    ids.extend(p.media.iter().map(|m| m.id.0));
+    ids
+}
+
+/// Two authors add slides, placeholders, layouts and media to their own copy of one deck.
+fn author_edits(p: &mut Presentation, tag: u32) {
+    p.set_author_tag(tag);
+    let layout = p.masters[0].layouts[1].id;
+    for _ in 0..3 {
+        let s = defaults::new_slide(p, layout);
+        p.slides.push(Arc::new(s));
+    }
+    let id = LayoutId(p.alloc_id());
+    Arc::make_mut(&mut p.masters[0]).layouts.push(Layout { id, name: format!("Mine {tag}"), ..Default::default() });
+    p.add_media(&format!("{tag}.png"), "image/png", vec![tag as u8; 8]);
+}
+
+#[test]
+fn two_authors_never_mint_the_same_id() {
+    let base = Presentation::default();
+    let before = every_id(&base);
+    let (mut a, mut b) = (base.clone(), base.clone());
+    author_edits(&mut a, 1);
+    author_edits(&mut b, 2);
+    let mut minted: Vec<u64> = every_id(&a).into_iter().chain(every_id(&b)).filter(|i| !before.contains(i)).collect();
+    let n = minted.len();
+    assert_eq!(n, 2 * (3 * 3 + 1 + 1), "three slides of three ids, a layout and a media item each");
+    minted.sort_unstable();
+    minted.dedup();
+    assert_eq!(minted.len(), n, "an id minted by both authors");
+    assert!(minted.iter().all(|&i| i < 1 << 53), "ids stay exact as JSON numbers");
+    assert!(minted.iter().all(|&i| matches!(split_id(i), (1 | 2, _))));
+}
+
+#[test]
+fn the_solo_author_mints_as_before() {
+    let mut p = Presentation::default();
+    let last = p.next_id;
+    assert_eq!(p.alloc_id(), u64::from(last) + 1);
+    assert!(p.author_next.is_empty());
+}
+
+#[test]
+fn a_counter_is_never_reused_after_a_delete() {
+    let mut p = Presentation::default();
+    p.set_author_tag(7);
+    let first = p.alloc_id();
+    let id = SlideId(p.alloc_id());
+    p.slides.push(Arc::new(Slide { id, ..Default::default() }));
+    p.slides.retain(|s| s.id != id);
+    p.fix_next_id();
+    let next = p.alloc_id();
+    assert_eq!(split_id(first), (7, 1));
+    assert_eq!(split_id(next), (7, 3), "the deleted slide's id is not minted again");
+}
+
+#[test]
+fn fix_next_id_counts_each_tag_on_its_own() {
+    let mut p = Presentation::default();
+    let solo = p.next_id;
+    p.slides.push(Arc::new(Slide { id: SlideId(author_id(5, 40)), ..Default::default() }));
+    p.fix_next_id();
+    assert_eq!(p.next_id, solo, "an author's ids do not move the solo counter");
+    assert_eq!(p.author_next.get(&5), Some(&40));
+    p.set_author_tag(5);
+    assert_eq!(p.alloc_id(), author_id(5, 41));
+}
+
+#[test]
+fn a_tag_wider_than_21_bits_is_masked() {
+    let mut p = Presentation::default();
+    p.set_author_tag(u32::MAX);
+    assert!(p.alloc_id() < 1 << 53);
 }
 
 #[test]

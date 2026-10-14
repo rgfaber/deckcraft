@@ -704,7 +704,7 @@ fn media_options(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn shape_id(p: &Value, key: &str) -> Option<deckcraft_model::ShapeId> {
-    p.get(key).and_then(Value::as_u64).map(|v| deckcraft_model::ShapeId(v as u32))
+    p.get(key).and_then(Value::as_u64).map(deckcraft_model::ShapeId)
 }
 
 fn sites(s: &mut Session, p: &Value) -> Result<Value> {
@@ -744,7 +744,7 @@ fn connect(s: &mut Session, p: &Value) -> Result<Value> {
         None => {
             let preset = str_param(p, "preset").unwrap_or("straightConnector1");
             let r = s.execute("shape.insert", &json!({"preset": preset, "rect": [p0.x, p0.y, 1.0, 1.0]}))?;
-            deckcraft_model::ShapeId(r.get("id").and_then(Value::as_u64).ok_or_else(|| bad("shape.connect", "insert failed"))? as u32)
+            deckcraft_model::ShapeId(r.get("id").and_then(Value::as_u64).ok_or_else(|| bad("shape.connect", "insert failed"))?)
         }
     };
     s.edit(|doc, sel| {
@@ -816,7 +816,7 @@ fn freeform(s: &mut Session, p: &Value) -> Result<Value> {
     let d = freeform_path(&local, closed, smooth);
     // Closed shapes take the default shape style, open paths the line style.
     let r = s.execute("shape.insert", &json!({"preset": if closed { "rect" } else { "line" }, "rect": [bb.x0, bb.y0, w, h]}))?;
-    let id = deckcraft_model::ShapeId(r.get("id").and_then(Value::as_u64).ok_or_else(|| bad("shape.freeform", "insert failed"))? as u32);
+    let id = deckcraft_model::ShapeId(r.get("id").and_then(Value::as_u64).ok_or_else(|| bad("shape.freeform", "insert failed"))?);
     s.edit(|doc, sel| {
         let list = crate::shapes_mut(doc, sel).ok_or_else(|| bad("shape.freeform", "no slide"))?;
         let sh = deckcraft_model::find_shape_mut(list, id).ok_or_else(|| bad("shape.freeform", "insert failed"))?;

@@ -1,6 +1,7 @@
 //! A new presentation: one master with the standard set of layouts, master text styles, and a
 //! first title slide. Positions and sizes are our own (16:9 at 960 × 540 pt, 4:3 scaled).
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use deckcraft_color::SchemeSlot;
@@ -52,7 +53,7 @@ impl B {
     fn shape(&mut self, name: &str, kind: PhType, idx: u32, x: f64, y: f64, w: f64, h: f64) -> Shape {
         self.next += 1;
         Shape {
-            id: ShapeId(self.next),
+            id: ShapeId(u64::from(self.next)),
             name: name.into(),
             xfrm: Some(Xfrm::new(x, y, w, h)),
             ph: Some(ph(kind, idx)),
@@ -236,7 +237,7 @@ pub fn build_master(size: Size, theme: Theme, first_id: u32) -> (Master, u32) {
     let mut lay = |b: &mut B, name: &str, kind: LayoutType, shapes: Vec<Shape>| {
         b.next += 1;
         layouts.push(Layout {
-            id: LayoutId(b.next),
+            id: LayoutId(u64::from(b.next)),
             name: name.into(),
             kind,
             shapes,
@@ -463,7 +464,7 @@ pub fn build_master(size: Size, theme: Theme, first_id: u32) -> (Master, u32) {
     let (title_style, body_style, other_style) = master_styles();
     b.next += 1;
     let master = Master {
-        id: MasterId(b.next),
+        id: MasterId(u64::from(b.next)),
         name: theme.name.clone(),
         theme,
         shapes: mshapes,
@@ -510,6 +511,8 @@ pub fn blank_presentation(size: Size, theme: Theme, title_slide: bool) -> Presen
         media: vec![],
         first_slide_number: 1,
         next_id: next.max(256),
+        author_next: BTreeMap::new(),
+        author_tag: 0,
         embedded_fonts: vec![],
         raw_ext: None,
     };

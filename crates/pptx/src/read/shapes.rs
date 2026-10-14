@@ -37,15 +37,15 @@ impl IdCtx {
             && !self.used.contains(&i)
         {
             self.used.insert(i);
-            self.map.insert(i, ShapeId(i));
-            return ShapeId(i);
+            self.map.insert(i, ShapeId(u64::from(i)));
+            return ShapeId(u64::from(i));
         }
         let n = imp.alloc();
         self.used.insert(n);
         if let Some(i) = file_id {
-            self.map.entry(i).or_insert(ShapeId(n));
+            self.map.entry(i).or_insert(ShapeId(u64::from(n)));
         }
-        ShapeId(n)
+        ShapeId(u64::from(n))
     }
     pub fn lookup(&self, file_id: u32) -> Option<ShapeId> {
         self.map.get(&file_id).copied()
@@ -95,7 +95,7 @@ fn remap_connectors(shapes: &mut [Shape], ctx: &IdCtx, depth: usize) {
         match &mut s.kind {
             ShapeKind::Connector { start, end } => {
                 for e in [start, end] {
-                    *e = e.and_then(|(id, site)| ctx.lookup(id.0).map(|m| (m, site)));
+                    *e = e.and_then(|(id, site)| u32::try_from(id.0).ok().and_then(|f| ctx.lookup(f)).map(|m| (m, site)));
                 }
             }
             ShapeKind::Group { children, .. } => remap_connectors(children, ctx, depth + 1),
@@ -310,7 +310,7 @@ fn cxn(imp: &mut Imp, part: &Part, ctx: &mut IdCtx, e: &El) -> Shape {
     }
     s.style = e.child("style").map(style);
     let c = nv.and_then(|n| n.child("cNvCxnSpPr"));
-    let end = |n: &str| c.and_then(|c| c.child(n)).and_then(|x| Some((ShapeId(x.u32("id")?), x.u32("idx").unwrap_or(0))));
+    let end = |n: &str| c.and_then(|c| c.child(n)).and_then(|x| Some((ShapeId(u64::from(x.u32("id")?)), x.u32("idx").unwrap_or(0))));
     s.kind = ShapeKind::Connector { start: end("stCxn"), end: end("endCxn") };
     s
 }

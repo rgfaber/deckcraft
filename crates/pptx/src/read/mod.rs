@@ -46,7 +46,7 @@ impl Imp<'_> {
         let data = self.pkg.get(part)?.to_vec();
         let name = opc::file_of(self.pkg.original_name(part).unwrap_or(part)).to_string();
         let content_type = self.pkg.content_type(part).filter(|c| !c.is_empty()).unwrap_or_else(|| crate::mime_for(&name).to_string());
-        let id = MediaId(self.alloc());
+        let id = MediaId(u64::from(self.alloc()));
         self.media.push(MediaItem { id, name, content_type, data: Arc::new(data), link: None });
         self.media_by_part.insert(key, id);
         Some(id)
@@ -56,7 +56,7 @@ impl Imp<'_> {
         if let Some(m) = self.media.iter().find(|m| m.link.as_deref() == Some(url)) {
             return m.id;
         }
-        let id = MediaId(self.alloc());
+        let id = MediaId(u64::from(self.alloc()));
         let name = url.rsplit('/').next().unwrap_or(url).to_string();
         let content_type = crate::mime_for(&name).to_string();
         self.media.push(MediaItem { id, name, content_type, data: Arc::new(vec![]), link: Some(url.to_string()) });
@@ -238,7 +238,7 @@ pub fn import(bytes: &[u8]) -> Result<Presentation, PptxError> {
             log::warn!("pptx: slide {path} is missing or unreadable; skipped");
             continue;
         }
-        let id = SlideId(imp.alloc());
+        let id = SlideId(u64::from(imp.alloc()));
         imp.slide_by_part.insert(opc::norm(path), id);
         slide_ids.push((*file_id, path.clone(), id));
     }
@@ -360,7 +360,7 @@ pub fn import(bytes: &[u8]) -> Result<Presentation, PptxError> {
     {
         let part = Part::new(&pkg, &r.target, &d);
         let mut ctx = shapes::IdCtx::default();
-        let mut m = Master { id: MasterId(imp.alloc()), name: "Notes Master".into(), ..Default::default() };
+        let mut m = Master { id: MasterId(u64::from(imp.alloc())), name: "Notes Master".into(), ..Default::default() };
         if let Some(t) = part.rels.first_of("theme")
             && let Some(td) = pkg.xml(&t.target)
         {
@@ -442,7 +442,7 @@ fn read_master(imp: &mut Imp, path: &str, doc: &Doc, docs: &HashMap<String, Doc>
         let tp = Part::new(pkg, &t.target, &td);
         m.theme = theme::read_theme(imp, &tp, &td.root);
     }
-    m.id = MasterId(imp.alloc());
+    m.id = MasterId(u64::from(imp.alloc()));
     if let Some(cm) = root.child("clrMap") {
         m.color_map = color_map(cm);
     }
@@ -493,7 +493,7 @@ fn read_master(imp: &mut Imp, path: &str, doc: &Doc, docs: &HashMap<String, Doc>
         // A master must have a layout for slides to use.
         imp.next = imp.next.saturating_add(1);
         m.layouts.push(Layout {
-            id: LayoutId(imp.next),
+            id: LayoutId(u64::from(imp.next)),
             name: "Blank".into(),
             kind: LayoutType::Blank,
             show_master_shapes: true,
@@ -509,7 +509,7 @@ fn read_master(imp: &mut Imp, path: &str, doc: &Doc, docs: &HashMap<String, Doc>
 fn read_layout(imp: &mut Imp, part: &Part, doc: &Doc) -> Layout {
     let root = &doc.root;
     let mut l = Layout {
-        id: LayoutId(imp.alloc()),
+        id: LayoutId(u64::from(imp.alloc())),
         kind: LayoutType::from_xml(root.attr("type").unwrap_or("cust")),
         show_master_shapes: root.bool("showMasterSp").unwrap_or(true),
         preserve: root.bool("preserve").unwrap_or(false),

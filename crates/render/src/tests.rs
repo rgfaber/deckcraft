@@ -53,7 +53,7 @@ fn every_preset_renders_without_panic() {
         .iter()
         .enumerate()
         .map(|(i, pr)| Shape {
-            id: ShapeId(1000 + i as u32),
+            id: ShapeId(1000 + i as u64),
             xfrm: Some(Xfrm::new((i % 16) as f64 * 60.0, (i / 16) as f64 * 55.0, 50.0, 45.0)),
             geom: Geom::preset(pr.name),
             style: Some(ShapeStyle::accent(deckcraft_color::SchemeSlot::Accent2)),
@@ -109,7 +109,7 @@ fn effects_tables_charts_render() {
     .enumerate()
     {
         charts.push(Shape {
-            id: ShapeId(700 + i as u32),
+            id: ShapeId(700 + i as u64),
             xfrm: Some(Xfrm::new(i as f64 * 110.0, 300.0, 100.0, 100.0)),
             kind: ShapeKind::Chart(Box::new(Chart::sample(*k))),
             ..Default::default()
@@ -216,7 +216,7 @@ fn blend_ends_match_the_slides_and_mixes_backdrops() {
     let _ = render_blend(&p, 0, 1, f64::NAN, &shapes, &[], &o);
 }
 
-fn text_shape(id: u32, text: &str, x: f64, y: f64) -> Shape {
+fn text_shape(id: u64, text: &str, x: f64, y: f64) -> Shape {
     let mut t = TextBody::from_text(text);
     for p in &mut t.paragraphs {
         for r in &mut p.runs {

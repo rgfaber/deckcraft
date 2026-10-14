@@ -23,15 +23,17 @@ impl IdMap {
         let mut map = HashMap::new();
         let mut used = HashSet::new();
         let mut max = 1u32;
+        // A model id is kept when it fits a cNvPr id; author-scoped ids never do.
+        let keep = |s: &Shape| u32::try_from(s.id.0).ok().filter(|v| (2..i32::MAX as u32).contains(v));
         walk(shapes, &mut |s, _| {
-            if s.id.0 >= 2 && s.id.0 < i32::MAX as u32 {
-                max = max.max(s.id.0);
+            if let Some(v) = keep(s) {
+                max = max.max(v);
             }
         });
         let mut next = max;
         walk(shapes, &mut |s, _| {
-            let id = if s.id.0 >= 2 && s.id.0 < i32::MAX as u32 && !used.contains(&s.id.0) {
-                s.id.0
+            let id = if let Some(v) = keep(s).filter(|v| !used.contains(v)) {
+                v
             } else {
                 next = next.saturating_add(1);
                 next
